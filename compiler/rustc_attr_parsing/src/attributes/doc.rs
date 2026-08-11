@@ -1,5 +1,5 @@
 use rustc_ast::ast::{AttrStyle, LitKind, MetaItemLit};
-use rustc_attr_ir::target::Target;
+use rustc_attr_ir::target::{MethodKind, Target};
 use rustc_attr_ir::{
     AttributeKind, CfgEntry, CfgHideShow, DocAttribute, DocCfgHideShow, DocCfgHideShowValue,
     DocInline, HideOrShow,
@@ -26,6 +26,7 @@ use crate::diagnostics::{
 use crate::parser::{
     ArgParser, MetaItemListParser, MetaItemOrLitParser, MetaItemParser, OwnedPathParser,
 };
+use crate::target_checking::Policy::Allow;
 
 fn check_keyword(cx: &mut AcceptContext<'_, '_>, keyword: Symbol, span: Span) -> bool {
     // FIXME: Once rustdoc can handle URL conflicts on case insensitive file systems, we
@@ -243,12 +244,91 @@ impl DocParser {
         self.attribute.aliases.insert(alias, span);
     }
 
+    // TODO: move check_attr target checks here using cx.check_target
     fn parse_alias(
         &mut self,
         cx: &mut AcceptContext<'_, '_>,
         path: &OwnedPathParser,
         args: &ArgParser,
     ) {
+        let mut allowed_targets = vec![
+            Allow(Target::ExternCrate),
+            Allow(Target::Use),
+            Allow(Target::Static),
+            Allow(Target::Const),
+            Allow(Target::Fn),
+            Allow(Target::Mod),
+            Allow(Target::GlobalAsm),
+            Allow(Target::TyAlias),
+            Allow(Target::Enum),
+            Allow(Target::Variant),
+            Allow(Target::Struct),
+            Allow(Target::Field),
+            Allow(Target::Union),
+            Allow(Target::Trait),
+            Allow(Target::TraitAlias),
+            Allow(Target::Method(MethodKind::Inherent)),
+            Allow(Target::Method(MethodKind::Trait { body: false })),
+            Allow(Target::Method(MethodKind::Trait { body: true })),
+            Allow(Target::Method(MethodKind::TraitImpl)),
+            Allow(Target::ForeignFn),
+            Allow(Target::ForeignStatic),
+            Allow(Target::ForeignTy),
+            // FIXME: this is... cumbersome
+            Allow(Target::GenericParam {
+                kind: rustc_attr_ir::target::GenericParamKind::Const,
+                has_default: false,
+            }),
+            Allow(Target::GenericParam {
+                kind: rustc_attr_ir::target::GenericParamKind::Const,
+                has_default: true,
+            }),
+            Allow(Target::GenericParam {
+                kind: rustc_attr_ir::target::GenericParamKind::Lifetime,
+                has_default: false,
+            }),
+            Allow(Target::GenericParam {
+                kind: rustc_attr_ir::target::GenericParamKind::Lifetime,
+                has_default: true,
+            }),
+            Allow(Target::GenericParam {
+                kind: rustc_attr_ir::target::GenericParamKind::Type,
+                has_default: false,
+            }),
+            Allow(Target::GenericParam {
+                kind: rustc_attr_ir::target::GenericParamKind::Type,
+                has_default: true,
+            }),
+            Allow(Target::MacroDef),
+            Allow(Target::PatField),
+            Allow(Target::ExprField),
+            Allow(Target::Crate),
+            Allow(Target::MacroCall),
+            Allow(Target::Delegation { mac: false }),
+            Allow(Target::Delegation { mac: true }),
+            Allow(Target::Loop),
+            Allow(Target::ForLoop),
+            Allow(Target::While),
+            Allow(Target::Break),
+            // we check the validity of params elsewhere
+            // TODO: ?
+            Allow(Target::Param),
+        ];
+
+        match self.tcx.def_kind(self.tcx.local_parent(hir_id.owner.def_id)) {
+            DefKind::Impl { .. } => (),
+            _ => allowed_targets.push(Allow(Target::AssocTy)),
+        }
+
+        let parent_def_id = self.tcx.hir_get_parent_item(hir_id).def_id;
+        let containing_item = self.tcx.hir_expect_item(parent_def_id);
+        // We can't link to trait impl's consts.
+        let err = "associated constant in trait implementation block";
+        match containing_item.kind {
+            ItemKind::Impl(hir::Impl { of_trait: Some(_), .. }) => (),
+            _ => allowed_targets.push(Allow(Target::AssocConst)),
+        }
+
         match args {
             ArgParser::NoArgs => {
                 cx.emit_err(DocAliasMalformed { span: args.span().unwrap_or(path.span()) });
@@ -261,16 +341,19 @@ impl DocParser {
 
                     self.add_alias(cx, alias, i.span());
                 }
+                cx.check_target(args, &AllowedTargets::AllowList(&allowed_targets));
             }
             ArgParser::NameValue(nv) => {
                 let Some(alias) = cx.expect_string_literal(nv) else {
                     return;
                 };
                 self.add_alias(cx, alias, nv.value_span);
+                cx.check_target(args, &AllowedTargets::AllowList(&allowed_targets));
             }
         }
     }
 
+    // TODO move check_attrs.rs target check here
     fn parse_inline(
         &mut self,
         cx: &mut AcceptContext<'_, '_>,

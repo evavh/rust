@@ -829,70 +829,8 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
         }
     }
 
+    // TODO: move this target check to doc.rs/DocParser::parse_alias
     fn check_doc_alias_value(&self, span: Span, hir_id: HirId, target: Target, alias: Symbol) {
-        if let Some(location) = match target {
-            Target::AssocTy => {
-                if let DefKind::Impl { .. } =
-                    self.tcx.def_kind(self.tcx.local_parent(hir_id.owner.def_id))
-                {
-                    Some("type alias in implementation block")
-                } else {
-                    None
-                }
-            }
-            Target::AssocConst => {
-                let parent_def_id = self.tcx.hir_get_parent_item(hir_id).def_id;
-                let containing_item = self.tcx.hir_expect_item(parent_def_id);
-                // We can't link to trait impl's consts.
-                let err = "associated constant in trait implementation block";
-                match containing_item.kind {
-                    ItemKind::Impl(hir::Impl { of_trait: Some(_), .. }) => Some(err),
-                    _ => None,
-                }
-            }
-            // we check the validity of params elsewhere
-            Target::Param => return,
-            Target::Expression
-            | Target::Statement
-            | Target::Arm
-            | Target::ForeignMod
-            | Target::Closure
-            | Target::Impl { .. }
-            | Target::WherePredicate => Some(target.name()),
-            Target::ExternCrate
-            | Target::Use
-            | Target::Static
-            | Target::Const
-            | Target::Fn
-            | Target::Mod
-            | Target::GlobalAsm
-            | Target::TyAlias
-            | Target::Enum
-            | Target::Variant
-            | Target::Struct
-            | Target::Field
-            | Target::Union
-            | Target::Trait
-            | Target::TraitAlias
-            | Target::Method(..)
-            | Target::ForeignFn
-            | Target::ForeignStatic
-            | Target::ForeignTy
-            | Target::GenericParam { .. }
-            | Target::MacroDef
-            | Target::PatField
-            | Target::ExprField
-            | Target::Crate
-            | Target::MacroCall
-            | Target::Delegation { .. }
-            | Target::Loop
-            | Target::ForLoop
-            | Target::While
-            | Target::Break => None,
-        } {
-            self.tcx.dcx().emit_err(diagnostics::DocAliasBadLocation { span, location });
-            return;
-        }
         if self.tcx.hir_opt_name(hir_id) == Some(alias) {
             self.tcx.dcx().emit_err(diagnostics::DocAliasNotAnAlias { span, attr_str: alias });
             return;
@@ -976,6 +914,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
             }
         };
 
+        // TODO: move this to doc.rs/
         match target {
             Target::Use | Target::ExternCrate => {}
             _ => {
