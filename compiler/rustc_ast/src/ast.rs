@@ -4289,6 +4289,13 @@ impl ItemKind {
             | Self::DelegationMac(..) => None,
         }
     }
+
+    pub fn is_impl_of_trait(&self) -> bool {
+        match self {
+            Self::Impl(Impl { of_trait: Some(_), .. }) => true,
+            _ => false,
+        }
+    }
 }
 
 /// Represents associated items.

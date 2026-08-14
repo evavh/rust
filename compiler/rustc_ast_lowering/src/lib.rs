@@ -1222,12 +1222,14 @@ impl<'hir> LoweringContext<'_, 'hir> {
         target_span: Span,
         target_hir_id: HirId,
         target: Target,
+        target_parent: Option<ItemKind>,
     ) -> Vec<hir::Attribute> {
         let l = self.span_lowerer();
         self.attribute_parser.parse_attribute_list(
             attrs,
             target_span,
             target,
+            target_parent,
             OmitDoc::Lower,
             |s| l.lower(s),
             |lint_id, span, kind| {

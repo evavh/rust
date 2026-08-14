@@ -117,6 +117,7 @@ pub fn parse_cfg_select(
                 lint_node_id,
                 // Doesn't matter what the target actually is here.
                 Target::Crate,
+                None,
                 features,
                 ShouldEmit::ErrorsAndLints { recovery: Recovery::Allowed },
                 &meta,

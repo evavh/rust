@@ -404,6 +404,7 @@ fn parse_cfg_attr_internal<'a>(
         pred_span,
         lint_node_id,
         Target::Crate,
+        None,
         features,
         ShouldEmit::ErrorsAndLints { recovery: Recovery::Allowed },
         &meta,

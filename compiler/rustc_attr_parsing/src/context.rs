@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 #[cfg(debug_assertions)]
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use rustc_ast::{AttrStyle, MetaItemLit, Safety};
+use rustc_ast::{AttrStyle, ItemKind, MetaItemLit, Safety};
 use rustc_attr_ir::target::Target;
 use rustc_attr_ir::{AttrPath, Attribute, AttributeKind};
 use rustc_data_structures::sync::{DynSend, DynSync};
@@ -776,6 +776,7 @@ pub struct SharedContext<'p, 'sess> {
     /// The span of the syntactical component this attribute was applied to
     pub(crate) target_span: Span,
     pub(crate) target: Target,
+    pub(crate) target_parent: Option<ItemKind>,
 
     pub(crate) emit_lint: &'p mut dyn FnMut(LintId, MultiSpan, EmitAttribute),
 

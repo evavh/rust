@@ -1,3 +1,4 @@
+use rustc_ast::ItemKind;
 use rustc_ast::ast::{AttrStyle, LitKind, MetaItemLit};
 use rustc_attr_ir::target::{MethodKind, Target};
 use rustc_attr_ir::{
@@ -244,7 +245,6 @@ impl DocParser {
         self.attribute.aliases.insert(alias, span);
     }
 
-    // TODO: move check_attr target checks here using cx.check_target
     fn parse_alias(
         &mut self,
         cx: &mut AcceptContext<'_, '_>,
@@ -311,22 +311,17 @@ impl DocParser {
             Allow(Target::While),
             Allow(Target::Break),
             // we check the validity of params elsewhere
-            // TODO: ?
             Allow(Target::Param),
         ];
 
-        match self.tcx.def_kind(self.tcx.local_parent(hir_id.owner.def_id)) {
-            DefKind::Impl { .. } => (),
-            _ => allowed_targets.push(Allow(Target::AssocTy)),
-        }
-
-        let parent_def_id = self.tcx.hir_get_parent_item(hir_id).def_id;
-        let containing_item = self.tcx.hir_expect_item(parent_def_id);
-        // We can't link to trait impl's consts.
-        let err = "associated constant in trait implementation block";
-        match containing_item.kind {
-            ItemKind::Impl(hir::Impl { of_trait: Some(_), .. }) => (),
-            _ => allowed_targets.push(Allow(Target::AssocConst)),
+        match cx.shared.target_parent {
+            Some(ref parent @ ItemKind::Impl(_)) if !parent.is_impl_of_trait() => {
+                allowed_targets.push(Allow(Target::AssocConst))
+            }
+            _ => {
+                allowed_targets.push(Allow(Target::AssocTy));
+                allowed_targets.push(Allow(Target::AssocConst));
+            }
         }
 
         match args {
@@ -341,14 +336,14 @@ impl DocParser {
 
                     self.add_alias(cx, alias, i.span());
                 }
-                cx.check_target(args, &AllowedTargets::AllowList(&allowed_targets));
+                // cx.check_target(args, &AllowedTargets::AllowList(&allowed_targets));
             }
             ArgParser::NameValue(nv) => {
                 let Some(alias) = cx.expect_string_literal(nv) else {
                     return;
                 };
                 self.add_alias(cx, alias, nv.value_span);
-                cx.check_target(args, &AllowedTargets::AllowList(&allowed_targets));
+                // cx.check_target(args, &AllowedTargets::AllowList(&allowed_targets));
             }
         }
     }

@@ -3,7 +3,7 @@ use std::convert::identity;
 #[cfg(debug_assertions)]
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use rustc_ast as ast;
+use rustc_ast::{self as ast, ItemKind};
 use rustc_ast::token::DocFragmentKind;
 use rustc_ast::{AttrStyle, CRATE_NODE_ID, NodeId, Safety};
 use rustc_attr_ir::target::Target;
@@ -109,6 +109,7 @@ impl<'sess> AttributeParser<'sess> {
             attrs,
             Some(parse_filter),
             Target::Crate,
+            None,
             target_span,
             CRATE_NODE_ID,
             features,
@@ -151,6 +152,7 @@ impl<'sess> AttributeParser<'sess> {
         attrs: &[ast::Attribute],
         parse_filter: Option<&dyn Fn(&ast::Attribute) -> bool>,
         target: Target,
+        target_parent: Option<ItemKind>,
         target_span: Span,
         target_node_id: NodeId,
         features: Option<&'sess Features>,
@@ -162,6 +164,7 @@ impl<'sess> AttributeParser<'sess> {
             attrs,
             target_span,
             target,
+            target_parent,
             OmitDoc::Skip,
             std::convert::identity,
             |lint_id, span, kind| {
@@ -178,6 +181,7 @@ impl<'sess> AttributeParser<'sess> {
         target_span: Span,
         target_node_id: NodeId,
         target: Target,
+        target_parent: Option<ItemKind>,
         features: Option<&'sess Features>,
         emit_errors: ShouldEmit,
         parse_fn: fn(cx: &mut AcceptContext<'_, '_>, item: &ArgParser) -> Option<T>,
@@ -208,6 +212,7 @@ impl<'sess> AttributeParser<'sess> {
             target_span,
             target_node_id,
             target,
+            target_parent,
             features,
             emit_errors,
             &args,
@@ -230,6 +235,7 @@ impl<'sess> AttributeParser<'sess> {
         target_span: Span,
         target_node_id: NodeId,
         target: Target,
+        target_parent: Option<ItemKind>,
         features: Option<&'sess Features>,
         should_emit: ShouldEmit,
         args: &I,
@@ -254,6 +260,7 @@ impl<'sess> AttributeParser<'sess> {
                 cx: &mut parser,
                 target_span,
                 target,
+                target_parent,
                 emit_lint: &mut emit_lint,
                 #[cfg(debug_assertions)]
                 has_lint_been_emitted: AtomicBool::new(false),
@@ -318,6 +325,7 @@ impl<'sess> AttributeParser<'sess> {
         attrs: &[ast::Attribute],
         target_span: Span,
         target: Target,
+        target_parent: Option<ItemKind>,
         omit_doc: OmitDoc,
         lower_span: impl Copy + Fn(Span) -> Span,
         mut emit_lint: impl FnMut(LintId, MultiSpan, EmitAttribute),
@@ -429,6 +437,7 @@ impl<'sess> AttributeParser<'sess> {
                                 cx: self,
                                 target_span,
                                 target,
+                                target_parent: target_parent.clone(),
                                 emit_lint: &mut emit_lint,
                                 #[cfg(debug_assertions)]
                                 has_lint_been_emitted: AtomicBool::new(false),
@@ -496,6 +505,7 @@ impl<'sess> AttributeParser<'sess> {
                     cx: self,
                     target_span,
                     target,
+                    target_parent: target_parent.clone(),
                     emit_lint: &mut emit_lint,
                     #[cfg(debug_assertions)]
                     has_lint_been_emitted: AtomicBool::new(false),
@@ -519,6 +529,7 @@ impl<'sess> AttributeParser<'sess> {
                         cx: self,
                         target_span,
                         target,
+                        target_parent: target_parent.clone(),
                         emit_lint: &mut emit_lint,
                         #[cfg(debug_assertions)]
                         has_lint_been_emitted: AtomicBool::new(false),
